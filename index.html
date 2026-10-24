@@ -1,0 +1,571 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<title>Talya</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: calm two-pane app — input on the left, the "mirror" (results) on the right; stacks on phones */
+:root{
+  --bg:#F1F4F3; --surface:#FFFFFF; --sunk:#E6ECEA; --ink:#1D292D; --muted:#5A6A6E; --line:#D3DCDA;
+  --accent:#2C6A60; --accent-ink:#FFFFFF; --partner:#77568A;
+  --hot:#B0502F; --cool:#3F6890; --calm:#2C6A60; --warnbg:#F7EDE6;
+  --display:"Young Serif", Georgia, "Times New Roman", serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111819; --surface:#192224; --sunk:#0D1314; --ink:#E3EAE8; --muted:#97A7A6; --line:#2B3739;
+  --accent:#6DB7A8; --accent-ink:#0D1716; --partner:#B596C6; --hot:#E58A68; --cool:#86AED6; --calm:#6DB7A8; --warnbg:#2A201B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111819; --surface:#192224; --sunk:#0D1314; --ink:#E3EAE8; --muted:#97A7A6; --line:#2B3739;
+  --accent:#6DB7A8; --accent-ink:#0D1716; --partner:#B596C6; --hot:#E58A68; --cool:#86AED6; --calm:#6DB7A8; --warnbg:#2A201B; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--body);margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 48px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.brand{display:flex;align-items:baseline;gap:12px}
+.brand h1{font:400 30px/1 var(--display);margin:0;letter-spacing:-.01em}
+.brand span{color:var(--muted);font-size:13px}
+nav{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:999px;overflow-x:auto;max-width:100%}
+nav button{border:0;background:none;color:var(--muted);font:600 14px var(--body);padding:8px 14px;border-radius:999px;cursor:pointer;white-space:nowrap}
+nav button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+button:focus-visible,input:focus-visible,label:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.notice{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding:2px 0 2px 12px;margin:0 0 18px;max-width:80ch}
+.grid{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:820px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+.stack{display:flex;flex-direction:column;gap:14px}
+h2{font:400 21px/1.2 var(--display);margin:0;text-wrap:balance}
+h3{font:600 12px/1 var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 14px var(--body);padding:9px 14px;border-radius:10px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.danger{color:var(--hot);border-color:var(--hot)}
+.rec{display:flex;flex-direction:column;gap:6px}
+.rec small{color:var(--muted);font-size:12.5px}
+.drop{display:block;border:1.5px dashed var(--line);border-radius:12px;padding:16px;text-align:center;cursor:pointer;color:var(--muted);font-size:14px}
+.drop strong{color:var(--ink)}
+.drop.over{border-color:var(--accent);background:var(--sunk)}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.clips{display:flex;flex-direction:column;gap:6px;list-style:none;margin:0;padding:0}
+.clip{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 12px;border-radius:10px;border:1px solid transparent;cursor:pointer;background:var(--sunk);text-align:left;font:inherit;color:inherit;width:100%}
+.clip[aria-pressed="true"]{border-color:var(--accent);background:var(--surface)}
+.clip b{font-weight:600}
+.clip .meta{color:var(--muted);font-size:12.5px;grid-column:1/-1}
+.pill{font:500 11px/1 var(--body);text-transform:uppercase;letter-spacing:.06em;padding:4px 7px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line);align-self:start}
+.base{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:8px}
+.base b{color:var(--ink)}
+.result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.tags{display:flex;gap:8px;flex-wrap:wrap}
+.tag{font:600 14px var(--body);padding:7px 12px;border-radius:999px;border:1.5px solid currentColor;display:inline-flex;gap:8px;align-items:center}
+.tag i{font-style:normal;font:500 12px var(--mono);opacity:.8}
+.tag.hot{color:var(--hot)} .tag.cool{color:var(--cool)} .tag.calm{color:var(--calm)}
+.conf{font-size:13px;color:var(--muted)}
+.conf b{color:var(--ink)}
+.lead{font:400 19px/1.45 var(--display);margin:0;max-width:62ch;text-wrap:pretty}
+.viz{position:relative;background:var(--sunk);border-radius:12px;padding:10px 10px 6px}
+.viz canvas{width:100%;height:150px;display:block}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);padding:4px 4px 0;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(--k)}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.switch{display:inline-flex;background:var(--sunk);border-radius:10px;padding:3px}
+.switch button{border:0;background:none;font:600 13px var(--body);color:var(--muted);padding:7px 12px;border-radius:8px;cursor:pointer}
+.switch button[aria-pressed="true"]{background:var(--surface);color:var(--ink)}
+.persp{background:var(--sunk);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.persp p{margin:0;max-width:65ch}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media (max-width:620px){.two{grid-template-columns:minmax(0,1fr)}}
+dl.meas{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;margin:0;font-size:14px}
+dl.meas dt{color:var(--muted)}
+dl.meas dd{margin:0;font-variant-numeric:tabular-nums}
+dl.meas dd code{font:500 13px var(--mono)}
+ul.tips{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px}
+.fine{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
+.empty{color:var(--muted);padding:30px 0;text-align:center}
+/* other tabs */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.card p{margin:0}
+.card .say{font:400 16px/1.45 var(--display);background:var(--sunk);padding:10px 12px;border-radius:10px}
+.people{display:flex;gap:12px;flex-wrap:wrap}
+.person{display:flex;align-items:center;gap:10px;background:var(--sunk);border-radius:12px;padding:10px 14px}
+.dot{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:600 14px var(--body);color:var(--accent-ink);background:var(--accent)}
+.dot.p2{background:var(--partner)}
+.consent{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.consent label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.consent input{margin-top:4px;accent-color:var(--accent)}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.hist li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.hist li:last-child{border-bottom:0}
+.confirm{background:var(--warnbg);border-radius:10px;padding:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.price{font:400 34px/1 var(--display)}
+.price small{font:500 14px var(--body);color:var(--muted)}
+.card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.card.feature{border-color:var(--accent);border-width:1.5px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.tag,.lead{animation:rise .35s ease both}@keyframes rise{from{transform:translateY(4px)}to{transform:none}}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>Talya</h1><span>hear how you sound, together</span></div>
+    <nav role="tablist" aria-label="Sections">
+      <button role="tab" id="tab-check" aria-selected="true" data-view="check">Check my tone</button>
+      <button role="tab" id="tab-space" aria-selected="false" data-view="space">Our space</button>
+      <button role="tab" id="tab-practice" aria-selected="false" data-view="practice">Practice</button>
+      <button role="tab" id="tab-plans" aria-selected="false" data-view="plans">Plans</button>
+    </nav>
+  </header>
+  <p class="notice">Talya listens to how something is said (pace, pitch, loudness), not what is meant. Results describe how a delivery often comes across. They can be wrong, and they are not a diagnosis or a verdict on who is right.</p>
+
+  <section id="view-check" class="grid">
+    <div class="panel stack">
+      <h2>New check</h2>
+      <div class="rec">
+        <button class="btn primary" id="recBtn" disabled>Record (in the app)</button>
+        <small>Live recording comes with the mobile app. In this preview, upload a voice memo or try a sample.</small>
+      </div>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept="audio/*,.m4a,.mp3,.wav,.ogg,.webm">
+        <strong>Upload a clip</strong><br>5 to 60 seconds of your own voice. It is analyzed on this device and never uploaded.
+      </label>
+      <h3>Clips</h3>
+      <ul class="clips" id="clips"></ul>
+      <div class="base" id="base"></div>
+    </div>
+    <div class="panel stack" id="result" aria-live="polite"></div>
+  </section>
+
+  <section id="view-space" class="stack" hidden>
+    <div class="panel stack">
+      <h2>Our space</h2>
+      <div class="people">
+        <div class="person"><div class="dot">You</div><div><b>You</b><br><small>Owner</small></div></div>
+        <div class="person"><div class="dot p2">?</div><div><b>Partner</b><br><small>Invite not sent</small></div></div>
+        <button class="btn" id="inviteBtn">Invite partner</button>
+      </div>
+      <p class="fine">Each partner analyzes only their own voice. Nothing is shared until you both turn sharing on.</p>
+    </div>
+    <div class="two">
+      <div class="panel stack">
+        <h3>Consent (both partners must agree)</h3>
+        <ul class="consent">
+          <li><label><input type="checkbox" id="c1"> <span>Share my saved clips' results with my partner</span></label></li>
+          <li><label><input type="checkbox" id="c2"> <span>Keep a history of results (clips themselves stay on my phone)</span></label></li>
+          <li><label><input type="checkbox" id="c3"> <span>Allow a joint review of a two-person exchange, one time per request</span></label></li>
+        </ul>
+        <p class="fine" id="consentState"></p>
+      </div>
+      <div class="panel stack">
+        <h3>Shared history <span class="pill">Example</span></h3>
+        <ul class="hist">
+          <li><span>Mon · "Can we talk about the weekend?"</span><span class="conf">Warm, even</span></li>
+          <li><span>Wed · Replay after dinner</span><span class="conf">Tense, then Soft</span></li>
+          <li><span>Fri · Practice: repair line</span><span class="conf">Soft / apologetic</span></li>
+        </ul>
+        <div id="delArea"><button class="btn danger" id="delBtn">Delete everything</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-practice" class="stack" hidden>
+    <h2>Practice</h2>
+    <p class="fine">Short exercises. Say the line out loud, record it, and check how it lands. Try it twice: once as you would usually say it, once slower.</p>
+    <div class="cards" id="exercises"></div>
+  </section>
+
+  <section id="view-plans" class="stack" hidden>
+    <h2>Plans</h2>
+    <p class="fine">Draft pricing for validation. One subscription covers both partners. No ads, and voice data is never sold.</p>
+    <div class="cards">
+      <div class="card"><h3>Free</h3><div class="price">$0</div>
+        <ul><li>5 checks a week</li><li>Tone tags and tips</li><li>Personal baseline</li><li>No history</li></ul></div>
+      <div class="card feature"><h3>Together</h3><div class="price">$9.99<small> / month per couple</small></div>
+        <p class="fine">or $79 a year</p>
+        <ul><li>Unlimited checks</li><li>Shared space and history (opt-in)</li><li>Full practice library</li><li>Weekly reflection</li></ul>
+        <button class="btn primary" id="joinBtn">Join the waitlist</button></div>
+      <div class="card"><h3>For counselors</h3><div class="price">Later</div>
+        <ul><li>Client-consented exports</li><li>Bulk seats</li><li>Only after the consumer app proves accurate enough</li></ul></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script>
+// ToneMirror core: synthetic sample voices + acoustic analysis + cautious interpretation
+const Core = (() => {
+  const cl = v => Math.max(0, Math.min(1, v));
+  function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  function pct(a, p) {
+    if (!a.length) return NaN;
+    const b = Float64Array.from(a).sort();
+    const i = (b.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+    return b[lo] + (b[hi] - b[lo]) * (i - lo);
+  }
+  const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN;
+
+  // Voice-like synthetic clip so the prototype opens with something to analyze.
+  function synth(p) {
+    const sr = 16000, N = Math.floor(p.dur * sr), out = new Float32Array(N), r = rng(p.seed);
+    const syl = []; let t = 0.2, i = 0;
+    while (t < p.dur - 0.3) {
+      const len = 0.72 / p.rate, pos = t / p.dur;
+      syl.push({ t, len, f: p.f0 * Math.pow(2, (p.contour(pos) + (r() - 0.5) * p.pitchVar) / 12), a: p.loud(pos) * (0.85 + 0.3 * r()) });
+      t += (1 / p.rate) * (0.85 + 0.3 * r()); i++;
+      if (p.pauseEvery && i % p.pauseEvery === 0) t += 0.32 + 0.2 * r();
+    }
+    let phase = 0, f = syl[0].f, k = 0, lp = 0;
+    for (let n = 0; n < N; n++) {
+      const tt = n / sr;
+      while (k < syl.length - 1 && tt >= syl[k + 1].t) k++;
+      const s = syl[k], dt = tt - s.t; let env = 0;
+      if (dt >= 0 && dt < s.len) {
+        if (dt < 0.025) env = dt / 0.025;
+        else if (dt < s.len * 0.7) env = 1 - 0.4 * (dt - 0.025) / (s.len * 0.7 - 0.025);
+        else env = 0.6 * (1 - (dt - s.len * 0.7) / (s.len * 0.3));
+      }
+      const target = s.f * (1 - 0.03 * Math.max(0, Math.min(dt, s.len)) / s.len);
+      f += (target - f) * 0.004;
+      phase += f / sr; phase -= Math.floor(phase);
+      lp += ((2 * phase - 1) - lp) * 0.35;
+      out[n] = lp * env * s.a * 0.6 + (r() - 0.5) * 0.004;
+    }
+    return { data: out, sr };
+  }
+
+  function analyze(data, sr) {
+    const factor = Math.max(1, Math.round(sr / 11025)), dsr = sr / factor;
+    const n = Math.floor(data.length / factor), x = new Float32Array(n);
+    for (let i = 0; i < n; i++) { let s = 0; for (let k = 0; k < factor; k++) s += data[i * factor + k]; x[i] = s / factor; }
+    const frame = Math.round(dsr * 0.046), hop = Math.round(dsr * 0.02), hopSec = hop / dsr;
+    const F = Math.max(0, Math.floor((n - frame) / hop) + 1);
+    const db = new Float32Array(F), pitch = new Float32Array(F);
+    for (let f = 0; f < F; f++) {
+      let m = 0; const o = f * hop;
+      for (let i = 0; i < frame; i++) m += x[o + i]; m /= frame;
+      let e = 0; for (let i = 0; i < frame; i++) { const v = x[o + i] - m; e += v * v; }
+      db[f] = 10 * Math.log10(e / frame + 1e-12);
+    }
+    const floor = pct(db, 0.1), top = pct(db, 0.98);
+    const thr = Math.max(floor + 10, top - 30);
+    const minLag = Math.floor(dsr / 420), maxLag = Math.ceil(dsr / 70);
+    const b = new Float32Array(frame), sq = new Float64Array(frame + 1), rr = new Float64Array(maxLag + 2);
+    for (let f = 0; f < F; f++) {
+      if (db[f] <= thr) continue;
+      const o = f * hop; let m = 0;
+      for (let i = 0; i < frame; i++) m += x[o + i]; m /= frame;
+      for (let i = 0; i < frame; i++) { b[i] = x[o + i] - m; sq[i + 1] = sq[i] + b[i] * b[i]; }
+      let best = 0;
+      for (let l = minLag; l <= maxLag && l < frame - 8; l++) {
+        let s = 0; for (let i = 0; i + l < frame; i++) s += b[i] * b[i + l];
+        const d = Math.sqrt(sq[frame - l] * (sq[frame] - sq[l])) + 1e-12;
+        rr[l] = s / d; if (rr[l] > best) best = rr[l];
+      }
+      if (best < 0.5) continue;
+      for (let l = minLag + 1; l < maxLag && l < frame - 9; l++) {
+        if (rr[l] >= 0.88 * best && rr[l] >= rr[l - 1] && rr[l] >= rr[l + 1]) {
+          const a = rr[l - 1], c = rr[l + 1], den = a - 2 * rr[l] + c;
+          const off = den !== 0 ? 0.5 * (a - c) / den : 0;
+          pitch[f] = dsr / (l + Math.max(-0.5, Math.min(0.5, off)));
+          break;
+        }
+      }
+    }
+    const voiced = []; for (let f = 0; f < F; f++) if (db[f] > thr) voiced.push(f);
+    const dur = data.length / sr;
+    if (voiced.length < 10) return { dur, tooQuiet: true, track: { db, pitch, thr, hopSec } };
+    const first = voiced[0], last = voiced[voiced.length - 1], span = last - first + 1;
+    let st = [], stIdx = [];
+    for (let f = 0; f < F; f++) if (pitch[f] > 0) { st.push(12 * Math.log2(pitch[f] / 100)); stIdx.push(f); }
+    const med0 = pct(st, 0.5);
+    const keep = st.map(v => Math.abs(v - med0) < 7);
+    stIdx = stIdx.filter((_, i) => keep[i]); st = st.filter((_, i) => keep[i]);
+    stIdx.forEach((f) => {});
+    for (let f = 0; f < F; f++) if (pitch[f] > 0 && !stIdx.includes(f)) pitch[f] = 0;
+    const medSt = pct(st, 0.5), iqr = pct(st, 0.75) - pct(st, 0.25);
+    const inPart = (f, a, z) => f >= first + span * a && f < first + span * z;
+    const vdb = voiced.map(f => db[f]);
+    const dbFirst = mean(voiced.filter(f => inPart(f, 0, 1 / 3)).map(f => db[f]));
+    const dbLast = mean(voiced.filter(f => inPart(f, 2 / 3, 1.01)).map(f => db[f]));
+    const stFirst = pct(st.filter((_, i) => inPart(stIdx[i], 0, 1 / 3)), 0.5);
+    const stLast = pct(st.filter((_, i) => inPart(stIdx[i], 2 / 3, 1.01)), 0.5);
+    const stEnd = pct(st.filter((_, i) => inPart(stIdx[i], 0.85, 1.01)), 0.5);
+    const meanDb = mean(vdb);
+    const dyn = Math.sqrt(mean(vdb.map(v => (v - meanDb) ** 2)));
+    // syllable-like peaks
+    const sm = new Float32Array(F);
+    for (let f = 0; f < F; f++) sm[f] = (db[Math.max(0, f - 1)] + db[f] + db[Math.min(F - 1, f + 1)]) / 3;
+    let peaks = 0, lastPeak = -99;
+    for (let f = 1; f < F - 1; f++) {
+      if (sm[f] <= thr || sm[f] < sm[f - 1] || sm[f] < sm[f + 1]) continue;
+      let lo = Infinity; for (let k = Math.max(0, f - 6); k <= Math.min(F - 1, f + 6); k++) lo = Math.min(lo, sm[k]);
+      if (sm[f] - lo >= 3 && f - lastPeak >= 5) { peaks++; lastPeak = f; }
+    }
+    let pauseFrames = 0, run = 0;
+    for (let f = first; f <= last; f++) {
+      if (db[f] <= thr) run++; else { if (run >= 15) pauseFrames += run; run = 0; }
+    }
+    const spanSec = span * hopSec, pauseSec = pauseFrames * hopSec, speakSec = Math.max(0.5, spanSec - pauseSec);
+    const snr = top - floor;
+    return {
+      dur, voicedSec: voiced.length * hopSec, speakSec, pauseRatio: pauseSec / spanSec,
+      rate: peaks / speakSec, medSt, medHz: 100 * Math.pow(2, medSt / 12), iqr,
+      endRise: stEnd - medSt, meanDb, dyn, dbRise: dbLast - dbFirst, stRise: stLast - stFirst,
+      snr, quality: (voiced.length * hopSec >= 2 && snr >= 18) ? 'good' : 'limited',
+      track: { db, pitch, thr, hopSec }
+    };
+  }
+
+  const TAGS = {
+    warm: { name: 'Warm, even', tone: 'calm' },
+    tense: { name: 'Tense / pressured', tone: 'hot' },
+    escalating: { name: 'Escalating', tone: 'hot' },
+    flat: { name: 'Flat / withdrawn', tone: 'cool' },
+    soft: { name: 'Soft / apologetic', tone: 'calm' },
+    unsure: { name: 'Questioning / unsure', tone: 'cool' },
+    neutral: { name: 'Neutral', tone: 'calm' }
+  };
+
+  function interpret(m, base) {
+    const fast = cl((m.rate - 5.0) / 1.8), slow = cl((4.0 - m.rate) / 1.5);
+    const narrow = cl((2.2 - m.iqr) / 1.6), lively = cl((m.iqr - 3.5) / 3);
+    const lowDyn = cl((6 - m.dyn) / 4);
+    const esc = cl((m.dbRise / 6) * 0.6 + ((m.stRise || 0) / 3) * 0.4);
+    const rise = cl((m.endRise - 1.5) / 2.5), fall = cl((-m.endRise - 1) / 2.5);
+    let pUp = 0, louder = 0, quieter = 0, faster = 0;
+    if (base) {
+      pUp = cl((m.medSt - base.medSt - 1) / 3);
+      louder = cl((m.meanDb - base.meanDb - 2) / 6);
+      quieter = cl((base.meanDb - m.meanDb - 2) / 6);
+      faster = cl((m.rate - base.rate - 0.5) / 1.5);
+    }
+    const s = {
+      tense: base ? 0.35 * Math.max(fast, faster) + 0.35 * pUp + 0.3 * louder : 0.6 * fast + 0.4 * Math.max(esc, lively * 0.7),
+      escalating: esc,
+      flat: 0.6 * narrow + 0.4 * lowDyn,
+      soft: base ? 0.4 * slow + 0.35 * quieter + 0.25 * fall : 0.65 * slow + 0.35 * fall,
+      unsure: rise,
+      warm: cl((1 - fast) * (1 - narrow) * (1 - esc) * (1 - pUp) * (1 - Math.abs(m.rate - 4.2) / 2.5)) * 0.9
+    };
+    const ranked = Object.entries(s).sort((a, b) => b[1] - a[1]);
+    let tags = ranked.filter(([, v]) => v >= 0.35).slice(0, 2).map(([k, v]) => ({ key: k, score: v }));
+    if (!tags.length) tags = [{ key: 'neutral', score: 0.3 }];
+    const top = tags[0];
+    const levelDependent = top.key === 'tense' || top.key === 'soft';
+    const confidence = (m.quality === 'good' && top.score > 0.55 && (base || !levelDependent)) ? 'Moderate' : 'Low';
+    return { scores: s, tags, confidence };
+  }
+
+  return { synth, analyze, interpret, TAGS };
+})();
+if (typeof module !== 'undefined') module.exports = Core;
+</script><script>
+(() => {
+const $ = s => document.querySelector(s);
+const COPY = {
+  warm: { lead: 'This delivery often comes across as relaxed and open.',
+    speaker: 'You likely meant to sound steady and open.',
+    listener: 'Most partners hear this as safe to respond to. It invites a reply instead of a defense.',
+    tips: ['Keep this pace when you get to the hard part of the conversation.', 'Name the feeling directly: "I\'m a little worried about money this month."'] },
+  tense: { lead: 'This delivery often reads as pressured or irritated, even if the words are reasonable.',
+    speaker: 'You may feel you are just being clear, efficient, or getting it over with.',
+    listener: 'A partner may hear pressure and start preparing a defense before you finish.',
+    tips: ['Slow down by about a third and pause after your first sentence.', 'Lead with what you need: "I\'d like us to plan the weekend together" instead of "You always plan without me."'] },
+  escalating: { lead: 'Energy builds across this clip. Rising volume and pitch often signal a conversation turning into a fight.',
+    speaker: 'Your energy probably built because this matters to you. That is normal.',
+    listener: 'A partner often hears the climb more than the words, and their own volume tends to rise to meet it.',
+    tips: ['When you notice yourself speeding up, stop and take one breath.', 'Try a repair line: "I\'m getting worked up. Can I start that again?"'] },
+  flat: { lead: 'This delivery is very even, with little pitch movement. It can read as tired, guarded, or withholding.',
+    speaker: 'You may be tired, or working hard to stay calm.',
+    listener: 'A partner may hear little feeling and read it as not caring, or as quiet anger.',
+    tips: ['Add one sentence about how you feel: "I\'m frustrated, and I still want to sort this out."', 'Let your voice lift on the part you care about most.'] },
+  soft: { lead: 'This delivery is quieter and slower, which often reads as gentle or apologetic.',
+    speaker: 'You may be trying to be gentle, or to take responsibility.',
+    listener: 'This usually reads as sincere. If it is very soft, the main point can get lost.',
+    tips: ['Keep the warmth, and say your key sentence a little more firmly.', 'End with a clear ask so your partner knows what would help.'] },
+  unsure: { lead: 'Sentence endings lift here. That can sound tentative, or like a challenge, depending on the words.',
+    speaker: 'You may be checking whether your partner agrees with you.',
+    listener: 'Lifted endings can sound unsure, or like "right?" pressure, depending on the words.',
+    tips: ['Say your main point as a statement, then ask your question on its own.', 'Pause after a question so it lands as a real question.'] },
+  neutral: { lead: 'Nothing in the delivery stands out strongly. Listeners will mostly focus on your words.',
+    speaker: 'Your delivery is fairly even.', listener: 'Most partners will respond to the content here.',
+    tips: ['If the topic is hard, add one sentence about how you feel.'] }
+};
+const SAMPLES = [
+  { id: 's-calm', name: 'Calm check-in', note: 'Example voice', p: { dur: 9, f0: 120, rate: 3.8, pitchVar: 5, contour: x => -1.5 * x, loud: () => 0.35, pauseEvery: 5, seed: 7 } },
+  { id: 's-rush', name: 'Rushed reply', note: 'Example voice', p: { dur: 9, f0: 150, rate: 6.4, pitchVar: 4, contour: x => 3 * x, loud: x => 0.3 + 0.5 * x, pauseEvery: 0, seed: 11 } },
+  { id: 's-flat', name: '"It\'s fine."', note: 'Example voice', p: { dur: 8, f0: 105, rate: 3.2, pitchVar: 0.8, contour: () => 0, loud: () => 0.25, pauseEvery: 6, seed: 3 } }
+];
+const state = { clips: [], sel: null, base: null, baseId: null, persp: 'listener', playing: null };
+
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2600); }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function addClip(c) { c.metrics = Core.analyze(c.audio.data, c.audio.sr); state.clips.push(c); return c; }
+SAMPLES.forEach(s => addClip({ id: s.id, name: s.name, note: s.note, example: true, audio: Core.synth(s.p) }));
+state.baseId = 's-calm'; state.base = state.clips[0].metrics; state.sel = 's-rush';
+
+function renderClips() {
+  $('#clips').innerHTML = state.clips.map(c => {
+    const m = c.metrics, r = m.tooQuiet ? null : Core.interpret(m, c.id === state.baseId ? null : state.base);
+    const tag = r ? Core.TAGS[r.tags[0].key].name : 'Too quiet to read';
+    return `<li><button class="clip" data-id="${c.id}" aria-pressed="${c.id === state.sel}"><b>${esc(c.name)}</b>${c.example ? '<span class="pill">Example</span>' : '<span class="pill">Yours</span>'}<span class="meta">${m.dur.toFixed(1)} s · ${esc(tag)}${c.id === state.baseId ? ' · baseline' : ''}</span></button></li>`;
+  }).join('');
+  const b = state.clips.find(c => c.id === state.baseId);
+  $('#base').innerHTML = b
+    ? `<span><b>Baseline:</b> ${esc(b.name)}${b.example ? ' (example)' : ''}. Talya compares pitch, loudness and pace to how you sound when calm. Without one, it can only judge patterns inside a clip.</span>`
+    : `<span><b>No baseline yet.</b> Record yourself saying something neutral, like what you had for breakfast, then set it as your baseline. This is the biggest accuracy boost.</span>`;
+}
+
+function fmtSigned(v, d = 1) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d); }
+
+function renderResult() {
+  const c = state.clips.find(x => x.id === state.sel), el = $('#result');
+  if (!c) { el.innerHTML = '<p class="empty">Pick or upload a clip to see how it may come across.</p>'; return; }
+  const m = c.metrics;
+  if (m.tooQuiet) {
+    el.innerHTML = `<h2>${esc(c.name)}</h2><p class="lead">Talya could not find enough voice in this clip.</p><p class="fine">Try again closer to the phone, in a quieter room, with at least 5 seconds of speech.</p>`;
+    return;
+  }
+  const isBase = c.id === state.baseId, base = isBase ? null : state.base;
+  const r = Core.interpret(m, base), top = r.tags[0].key, copy = COPY[top];
+  const tagsHtml = r.tags.map(t => `<span class="tag ${Core.TAGS[t.key].tone}">${Core.TAGS[t.key].name}<i>${Math.round(t.score * 100)}</i></span>`).join('');
+  const rateNote = m.rate > 5.2 ? 'faster than typical conversation' : m.rate < 3.6 ? 'slower than typical conversation' : 'typical conversational pace';
+  const pitchNote = m.iqr < 1.5 ? 'narrow, very even' : m.iqr > 4 ? 'wide, very animated' : 'moderate';
+  const end = m.endRise > 1.5 ? 'rising' : m.endRise < -1 ? 'falling' : 'level';
+  const vsBase = base ? `<code>${fmtSigned(m.medSt - base.medSt)}</code> semitones vs baseline` : isBase ? 'this is your baseline' : 'set a baseline to compare';
+  const loudBase = base ? ` · <code>${fmtSigned(m.meanDb - base.meanDb)} dB</code> vs baseline` : '';
+  el.innerHTML = `
+    <div class="result-head">
+      <div class="stack" style="gap:8px"><h3>${esc(c.name)}${c.example ? ' · example' : ''}</h3><div class="tags">${tagsHtml}</div></div>
+      <div class="conf">Confidence: <b>${r.confidence}</b><br>${m.quality === 'good' ? 'Clear recording' : 'Noisy or short recording'}</div>
+    </div>
+    <p class="lead">${copy.lead}</p>
+    <div class="viz"><canvas id="cv" aria-label="Loudness and pitch over time"></canvas>
+      <div class="legend"><span style="--k:var(--line)">Loudness</span><span style="--k:var(--accent)">Pitch</span><span style="--k:var(--hot)">Playhead</span></div></div>
+    <div class="toolbar">
+      <button class="btn" id="playBtn">${state.playing ? 'Stop' : 'Play clip'}</button>
+      <div class="switch" role="group" aria-label="Perspective">
+        <button data-p="speaker" aria-pressed="${state.persp === 'speaker'}">What I meant</button>
+        <button data-p="listener" aria-pressed="${state.persp === 'listener'}">How it might land</button>
+      </div>
+      ${isBase ? '' : '<button class="btn" id="setBase">Use as my baseline</button>'}
+    </div>
+    <div class="persp"><h3>${state.persp === 'speaker' ? 'From your side' : 'From your partner\'s side'}</h3><p>${state.persp === 'speaker' ? copy.speaker : copy.listener}</p></div>
+    <div class="two">
+      <div class="stack"><h3>What Talya measured</h3>
+        <dl class="meas">
+          <dt>Pace</dt><dd><code>${m.rate.toFixed(1)}</code> syllables/s, ${rateNote}</dd>
+          <dt>Pitch</dt><dd><code>${Math.round(m.medHz)} Hz</code> typical, ${vsBase}</dd>
+          <dt>Pitch movement</dt><dd><code>${m.iqr.toFixed(1)}</code> semitones, ${pitchNote}</dd>
+          <dt>Loudness</dt><dd><code>${fmtSigned(m.dbRise)} dB</code> start to end${loudBase}</dd>
+          <dt>Endings</dt><dd>${end}</dd>
+          <dt>Pauses</dt><dd><code>${Math.round(m.pauseRatio * 100)}%</code> of speaking time</dd>
+        </dl></div>
+      <div class="stack"><h3>Try next time</h3><ul class="tips">${copy.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>
+    </div>
+    <p class="fine">Scores are 0 to 100 pattern matches, not percentages of emotion. Accents, colds, background noise and sarcasm all throw this off. Confidence is never shown as high, because voice alone cannot confirm how you feel.</p>`;
+  drawViz(c);
+}
+
+function drawViz(c, head) {
+  const cv = $('#cv'); if (!cv) return;
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  const cs = getComputedStyle(document.documentElement), col = n => cs.getPropertyValue(n).trim();
+  const { db, pitch, thr } = c.metrics.track, F = db.length;
+  const lo = thr - 6, hi = Math.max(...db) + 2;
+  g.fillStyle = col('--line');
+  for (let f = 0; f < F; f++) {
+    const v = Math.max(0, (db[f] - lo) / (hi - lo)), bh = v * (h - 8);
+    g.fillRect(f / F * w, (h - bh) / 2, Math.max(1, w / F - 0.5), bh);
+  }
+  const st = []; for (let f = 0; f < F; f++) if (pitch[f] > 0) st.push(12 * Math.log2(pitch[f] / 100));
+  if (st.length) {
+    const smin = Math.min(...st) - 2, smax = Math.max(...st) + 2;
+    g.fillStyle = col('--accent');
+    for (let f = 0; f < F; f++) if (pitch[f] > 0) {
+      const s = 12 * Math.log2(pitch[f] / 100), y = h - 6 - (s - smin) / (smax - smin) * (h - 12);
+      g.beginPath(); g.arc(f / F * w, y, 1.8, 0, 7); g.fill();
+    }
+  }
+  if (head != null) { g.fillStyle = col('--hot'); g.fillRect(head * w, 0, 2, h); }
+}
+
+let actx = null;
+function play(c) {
+  if (state.playing) { try { state.playing.src.stop(); } catch (e) {} state.playing = null; renderResult(); return; }
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const b = actx.createBuffer(1, c.audio.data.length, c.audio.sr); b.copyToChannel(c.audio.data, 0);
+    const src = actx.createBufferSource(); src.buffer = b; src.connect(actx.destination);
+    const t0 = actx.currentTime; src.start();
+    state.playing = { src, id: c.id };
+    src.onended = () => { if (state.playing && state.playing.src === src) { state.playing = null; renderResult(); } };
+    renderResult();
+    const tick = () => { if (!state.playing || state.playing.src !== src) return; drawViz(c, Math.min(1, (actx.currentTime - t0) / c.metrics.dur)); requestAnimationFrame(tick); };
+    tick();
+  } catch (e) { toast('Playback is not available in this view.'); }
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  $('#result').innerHTML = '<p class="empty">Analyzing on this device…</p>';
+  try {
+    const buf = await file.arrayBuffer();
+    const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
+    const audio = await ctx.decodeAudioData(buf);
+    const len = Math.min(audio.length, audio.sampleRate * 60), data = new Float32Array(len);
+    for (let ch = 0; ch < audio.numberOfChannels; ch++) { const d = audio.getChannelData(ch); for (let i = 0; i < len; i++) data[i] += d[i] / audio.numberOfChannels; }
+    await new Promise(r => setTimeout(r, 30));
+    const c = addClip({ id: 'u' + Date.now(), name: file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'My clip', audio: { data, sr: audio.sampleRate } });
+    state.sel = c.id; renderClips(); renderResult();
+    if (audio.length > len) toast('Only the first 60 seconds were analyzed.');
+    else if (c.metrics.dur < 4) toast('Short clips are less reliable. Aim for 5 seconds or more.');
+  } catch (e) { $('#result').innerHTML = '<p class="empty">This file could not be read as audio. Try an .m4a, .mp3 or .wav voice memo.</p>'; }
+}
+
+// events
+$('#clips').addEventListener('click', e => { const b = e.target.closest('.clip'); if (!b) return; if (state.playing) play(); state.sel = b.dataset.id; renderClips(); renderResult(); });
+$('#result').addEventListener('click', e => {
+  const c = state.clips.find(x => x.id === state.sel);
+  if (e.target.closest('#playBtn')) play(c);
+  const p = e.target.closest('[data-p]'); if (p) { state.persp = p.dataset.p; renderResult(); }
+  if (e.target.closest('#setBase')) { state.baseId = c.id; state.base = c.metrics; renderClips(); renderResult(); toast('Baseline set. Other clips now compare to this one.'); }
+});
+$('#file').addEventListener('change', e => handleFile(e.target.files[0]));
+const drop = $('#drop');
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b));
+  ['check', 'space', 'practice', 'plans'].forEach(v => $('#view-' + v).hidden = v !== b.dataset.view);
+  if (b.dataset.view === 'check') renderResult();
+}));
+function consent() {
+  const on = ['#c1', '#c2', '#c3'].filter(s => $(s).checked).length;
+  $('#consentState').textContent = on ? `You turned on ${on} of 3. Your partner sees a request and must agree before anything is shared.` : 'Everything is private to you right now.';
+}
+['#c1', '#c2', '#c3'].forEach(s => $(s).addEventListener('change', consent)); consent();
+$('#inviteBtn').addEventListener('click', () => toast('Invites arrive with accounts in the next build.'));
+$('#joinBtn').addEventListener('click', () => toast('The waitlist form comes with the landing page.'));
+$('#delArea').addEventListener('click', e => {
+  if (e.target.closest('#delBtn')) $('#delArea').innerHTML = '<div class="confirm"><span>Delete all clips, results and history for both of you? This cannot be undone.</span><button class="btn danger" id="delYes">Delete</button><button class="btn" id="delNo">Cancel</button></div>';
+  if (e.target.closest('#delNo')) $('#delArea').innerHTML = '<button class="btn danger" id="delBtn">Delete everything</button>';
+  if (e.target.closest('#delYes')) { $('#delArea').innerHTML = '<p class="fine">Deleted. (In this preview, the example history stays so you can see the layout.)</p>'; }
+});
+const EX = [
+  { t: 'Soft start', d: 'Open a hard topic without blame. Describe the situation, your feeling, and one request.', s: '"I\'ve been feeling stretched thin this week. Could we split dinners differently?"' },
+  { t: 'Repair attempt', d: 'Pause a conversation that is heating up, before it gets worse.', s: '"I\'m getting defensive. Can we slow down for a minute?"' },
+  { t: 'Slow replay', d: 'Say something you said in a recent argument, then say it again at two-thirds the speed. Compare both.', s: 'Your own words, twice.' },
+  { t: 'Say the feeling', d: 'Practice naming emotion out loud so your voice does not have to carry it alone.', s: '"I\'m hurt, and I want to understand what happened."' }
+];
+$('#exercises').innerHTML = EX.map((x, i) => `<div class="card"><h3>Exercise ${i + 1}</h3><h2>${x.t}</h2><p>${x.d}</p><p class="say">${esc(x.s)}</p><button class="btn" data-ex="${i}">Record this</button></div>`).join('');
+$('#exercises').addEventListener('click', e => { if (e.target.closest('[data-ex]')) { $('#tab-check').click(); toast('Upload your recording of the line to check it.'); } });
+window.addEventListener('resize', () => { const c = state.clips.find(x => x.id === state.sel); if (c && !c.metrics.tooQuiet) drawViz(c); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => renderResult());
+renderClips(); renderResult();
+})();
+</script>
+</body></html>
