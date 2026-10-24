@@ -1,4 +1,4 @@
-# Talya — Product Plan v0.2
+# Talya (working name) — Product Plan v0.3
 
 Talya helps couples hear how their own voice comes across. It analyzes pace, pitch and loudness in short clips and describes how that delivery often lands. It is a mirror for self-awareness, not a referee, a lie detector or therapy.
 
@@ -17,7 +17,7 @@ Talya helps couples hear how their own voice comes across. It analyzes pace, pit
 |---|---|---|
 | Voice only, or text too? | Voice only for v1 | Tone lives in the voice. Text tone is a different, weaker product. |
 | Individual or always couple-shared? | Individual first, opt-in sharing | Works for one partner alone, safer, and solo users can still convert. |
-| Price | Free: 5 checks/week. Together: $9.99/mo or $79/yr per couple | Within the planned $7–12 range; validate with a waitlist before charging. |
+| Price | Free: 3 checks/day. Together: $4.99/mo or $29.99/yr per couple; founding couples $19.99 first year | Owner wants scale. Checks cost us nothing (on-device), so the free tier can be generous; charge for history, sharing and the full practice library. |
 | Frameworks | Describe ideas like soft starts and repair attempts in our own words | Do not claim Gottman or NVC affiliation or endorsement without a license. |
 
 ## Ethics and safety
@@ -41,9 +41,13 @@ Talya helps couples hear how their own voice comes across. It analyzes pace, pit
 | Accounts and couple linking (later) | Supabase or Firebase free tier | $0 at small scale |
 | Mobile app (later) | Capacitor wrapping the web app first, then decide on native | $0 to build; $99/yr Apple and $25 one-time Google to publish |
 
+## Pricing math (for scale)
+
+At $29.99/yr, after app-store fees (15% for small developers on Apple and Google subscriptions), each paying couple nets about $25/yr. 1,000 paying couples is about $25k/yr; 10,000 is about $250k/yr. At a 5% free-to-paid rate, 10,000 paying couples needs about 200,000 free couples. Costs stay near zero until accounts and sharing need a server.
+
 ## Validation (next 4–6 weeks)
 
-1. Publish the prototype on GitHub Pages with live mic recording.
+1. Publish the prototype on GitHub Pages with live mic recording. (Recording is built; Pages needs to be switched on in repo settings.)
 2. Add a waitlist and a 3-question feedback form after each check: *Did this match how you meant it? Did it match how your partner heard it? Would you use this again this week?*
 3. Recruit 20–50 couples from relationship communities.
 4. Success bar before building accounts: at least 60% say the result "mostly matched," and at least 30% use it again within a week.
@@ -51,7 +55,7 @@ Talya helps couples hear how their own voice comes across. It analyzes pace, pit
 
 ## What the current prototype does
 
-- Analyzes uploaded clips or built-in example voices on the device.
+- Records from the microphone (on GitHub Pages) or analyzes uploaded clips or built-in example voices on the device.
 - Measures pace, typical pitch, pitch movement, loudness change, sentence endings and pauses.
 - Maps these to cautious tags: Warm, Tense, Escalating, Flat, Soft, Questioning, Neutral.
 - Speaker vs listener perspective switch, delivery tips, baseline setting.

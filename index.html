@@ -122,8 +122,8 @@ ul.tips{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px}
     <div class="panel stack">
       <h2>New check</h2>
       <div class="rec">
-        <button class="btn primary" id="recBtn" disabled>Record (in the app)</button>
-        <small>Live recording comes with the mobile app. In this preview, upload a voice memo or try a sample.</small>
+        <button class="btn primary" id="recBtn">Record</button>
+        <small id="recNote">Speak for 5 to 60 seconds. Your audio is analyzed on this device and never uploaded.</small>
       </div>
       <label class="drop" id="drop">
         <input type="file" id="file" accept="audio/*,.m4a,.mp3,.wav,.ogg,.webm">
@@ -179,9 +179,9 @@ ul.tips{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px}
     <p class="fine">Draft pricing for validation. One subscription covers both partners. No ads, and voice data is never sold.</p>
     <div class="cards">
       <div class="card"><h3>Free</h3><div class="price">$0</div>
-        <ul><li>5 checks a week</li><li>Tone tags and tips</li><li>Personal baseline</li><li>No history</li></ul></div>
-      <div class="card feature"><h3>Together</h3><div class="price">$9.99<small> / month per couple</small></div>
-        <p class="fine">or $79 a year</p>
+        <ul><li>3 checks a day</li><li>Tone tags and tips</li><li>Personal baseline</li><li>Starter exercises</li></ul></div>
+      <div class="card feature"><h3>Together</h3><div class="price">$4.99<small> / month per couple</small></div>
+        <p class="fine">or $29.99 a year. Founding couples: $19.99 for the first year.</p>
         <ul><li>Unlimited checks</li><li>Shared space and history (opt-in)</li><li>Full practice library</li><li>Weekly reflection</li></ul>
         <button class="btn primary" id="joinBtn">Join the waitlist</button></div>
       <div class="card"><h3>For counselors</h3><div class="price">Later</div>
@@ -508,7 +508,7 @@ function play(c) {
   } catch (e) { toast('Playback is not available in this view.'); }
 }
 
-async function handleFile(file) {
+async function handleFile(file, label) {
   if (!file) return;
   $('#result').innerHTML = '<p class="empty">Analyzing on this device…</p>';
   try {
@@ -518,12 +518,47 @@ async function handleFile(file) {
     const len = Math.min(audio.length, audio.sampleRate * 60), data = new Float32Array(len);
     for (let ch = 0; ch < audio.numberOfChannels; ch++) { const d = audio.getChannelData(ch); for (let i = 0; i < len; i++) data[i] += d[i] / audio.numberOfChannels; }
     await new Promise(r => setTimeout(r, 30));
-    const c = addClip({ id: 'u' + Date.now(), name: file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'My clip', audio: { data, sr: audio.sampleRate } });
+    const c = addClip({ id: 'u' + Date.now(), name: label || (file.name || '').replace(/\.[^.]+$/, '').slice(0, 40) || 'My clip', audio: { data, sr: audio.sampleRate } });
     state.sel = c.id; renderClips(); renderResult();
     if (audio.length > len) toast('Only the first 60 seconds were analyzed.');
     else if (c.metrics.dur < 4) toast('Short clips are less reliable. Aim for 5 seconds or more.');
   } catch (e) { $('#result').innerHTML = '<p class="empty">This file could not be read as audio. Try an .m4a, .mp3 or .wav voice memo.</p>'; }
 }
+
+
+// live microphone recording (works on GitHub Pages / normal browsers; refused inside some embedded previews)
+const rec = { mr: null, chunks: [], stream: null, t0: 0, timer: null };
+function recLabel() {
+  const b = $('#recBtn');
+  if (rec.mr) { const s = Math.floor((Date.now() - rec.t0) / 1000); b.textContent = `Stop · 0:${String(s).padStart(2, '0')}`; b.classList.remove('primary'); b.classList.add('danger'); }
+  else { b.textContent = 'Record'; b.classList.add('primary'); b.classList.remove('danger'); }
+}
+async function toggleRec() {
+  if (rec.mr) { rec.mr.stop(); return; }
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) {
+    $('#recNote').textContent = 'This browser cannot record here. Upload a voice memo instead.'; return;
+  }
+  try {
+    rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch (e) {
+    $('#recNote').textContent = 'Microphone access was blocked. Allow it in your browser settings, or upload a voice memo instead.'; return;
+  }
+  rec.chunks = [];
+  rec.mr = new MediaRecorder(rec.stream);
+  rec.mr.ondataavailable = e => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+  rec.mr.onstop = async () => {
+    clearInterval(rec.timer);
+    rec.stream.getTracks().forEach(t => t.stop());
+    const blob = new Blob(rec.chunks, { type: rec.mr.mimeType || 'audio/webm' });
+    rec.mr = null; recLabel();
+    const d = new Date();
+    await handleFile(blob, 'Recording ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+  };
+  if (state.playing) play();
+  rec.mr.start(); rec.t0 = Date.now(); recLabel();
+  rec.timer = setInterval(() => { if (!rec.mr) return; recLabel(); if (Date.now() - rec.t0 >= 60000) rec.mr.stop(); }, 250);
+}
+$('#recBtn').addEventListener('click', toggleRec);
 
 // events
 $('#clips').addEventListener('click', e => { const b = e.target.closest('.clip'); if (!b) return; if (state.playing) play(); state.sel = b.dataset.id; renderClips(); renderResult(); });
