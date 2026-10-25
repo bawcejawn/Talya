@@ -2,8 +2,13 @@
 
 Hear how you sound, together. A tone-of-voice mirror for couples.
 
-- `index.html` — clickable prototype (open it in a browser; no build step, no server)
-- `src/analysis.js` — on-device acoustic analysis and cautious interpretation
-- `PLAN.md` — product plan, decisions, safety rules and validation steps
+**Live:** https://bawcejawn.github.io/Talya/
+
+- `src/` — source: `ui.html` (layout and styles), `analysis.js` (on-device acoustic analysis), `app.js` (app logic)
+- `build.sh` — run after editing `src/`. Builds `index.html` (the live site) and `dist/artifact.html`
+- `manifest.json`, `sw.js`, icons — make the site installable and usable offline
+- `PLAN.md` — product plan, decisions, safety rules, validation
+- `MONETIZATION.md` — revenue streams, pricing, growth loops, metrics
+- `RECRUITING.md` — posts for finding test couples
 
 Talya describes how a delivery often comes across. It does not read minds, diagnose, or decide who is right. Audio never leaves the device.

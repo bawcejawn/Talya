@@ -55,10 +55,15 @@ At $29.99/yr, after app-store fees (15% for small developers on Apple and Google
 
 ## What the current prototype does
 
-- Records from the microphone (on GitHub Pages) or analyzes uploaded clips or built-in example voices on the device.
-- Measures pace, typical pitch, pitch movement, loudness change, sentence endings and pauses.
-- Maps these to cautious tags: Warm, Tense, Escalating, Flat, Soft, Questioning, Neutral.
-- Speaker vs listener perspective switch, delivery tips, baseline setting.
-- Mock screens for the couple space, consent, practice exercises and pricing.
+- **Check my tone:** records from the microphone or analyzes uploads, on the device. Tone tags, confidence, waveform with pitch, speaker vs listener view, tips, personal baseline.
+- **Prep a talk:** builds a soft opening from feeling, situation and request; flags common blame phrases; rehearse it out loud with a tone goal.
+- **Practice:** 6 drills with measurable goals (3 free, 3 Together). Slow replay compares two takes. Daily streak.
+- **Progress:** weekly stats, tone mix, pace trend against baseline, history, and a shareable weekly card.
+- **Our space:** partner invite text, Sunday check-in questions, sharing rules, delete everything.
+- **Plans:** Free, Together, Gift a year, counselors and courses. Everything is free during the beta.
+- **Installable:** add to home screen on phones; works offline after the first visit.
+- Results (never audio) are saved only in the browser.
+
+See `MONETIZATION.md` for revenue streams and growth loops.
 
 Thresholds in `src/analysis.js` are first guesses and must be tuned on real, consented recordings.
