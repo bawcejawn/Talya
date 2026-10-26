@@ -15,4 +15,8 @@ body() { cat src/ui.html; echo '<script>'; cat src/analysis.js; echo '</script><
   echo '</body></html>'
 } > index.html
 body > dist/artifact.html
+# www/ = the files packaged inside the Android and iPhone apps (no service worker needed there)
+rm -rf www && mkdir -p www
+sed "s#<script>if('serviceWorker'.*</script>##" index.html > www/index.html
+cp manifest.json icon-192.png icon-512.png apple-touch-icon.png www/
 echo built

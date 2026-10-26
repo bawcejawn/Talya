@@ -141,6 +141,39 @@ textarea{min-height:72px;resize:vertical}
 .sheet .panel{max-width:560px;width:100%;max-height:calc(100% - 40px);overflow:auto}
 .copybox{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
 .copybox textarea{flex:1 1 260px;min-height:96px}
+.lvl{display:flex;flex-direction:column;gap:4px}
+.lvlbar{height:10px;border-radius:999px;background:var(--sunk);overflow:hidden}
+.lvlbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .08s linear}
+.lvltxt{font-size:13px;font-weight:600;color:var(--accent)}
+.lvl.quiet .lvltxt{color:var(--hot)}
+.setup{background:var(--okbg);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.steps{display:flex;gap:6px}
+.steps span{flex:1;height:5px;border-radius:999px;background:var(--line)}
+.steps span.done{background:var(--soft)} .steps span.now{background:var(--accent)}
+.script{font:400 17px/1.5 var(--display);background:var(--surface);border-radius:10px;padding:10px 12px}
+.banner{background:var(--warnbg);border-radius:12px;padding:12px 14px;font-size:14px;margin:0 0 16px;max-width:80ch}
+.why{font-size:14px;color:var(--muted)}
+.mrows{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px 24px}
+.mrow{display:flex;flex-direction:column;gap:6px;min-width:0}
+.mhead{display:flex;justify-content:space-between;gap:4px 12px;flex-wrap:wrap;font-size:14px}
+.mhead span{color:var(--muted);font-variant-numeric:tabular-nums}
+.mrow p{font-size:14px}
+.scale{position:relative;height:10px;border-radius:999px;background:var(--sunk);margin:4px 6px 0}
+.scale .band{position:absolute;top:0;bottom:0;background:var(--line);border-radius:999px}
+.scale i{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--accent);border:2px solid var(--surface)}
+.scale .btick{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;border-radius:2px;background:var(--partner)}
+.scalelab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin:0 2px}
+.howto{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0;padding:0;list-style:none;counter-reset:s}
+.howto li{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px;counter-increment:s;display:flex;gap:10px}
+.howto li::before{content:counter(s);flex:0 0 24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font:600 13px var(--body)}
+.guide{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.guide .card p,.guide .card li{font-size:14.5px}
+.guide dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:14px}
+.guide dt{font-weight:600}
+.guide dd{margin:0;color:var(--muted)}
+details.trouble{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+details.trouble summary{cursor:pointer;font-weight:600}
+details.trouble[open] summary{margin-bottom:8px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);z-index:30}
 @media (prefers-reduced-motion:no-preference){.tag,.lead{animation:rise .35s ease both}@keyframes rise{from{transform:translateY(4px)}to{transform:none}}}
 </style>
@@ -157,13 +190,16 @@ textarea{min-height:72px;resize:vertical}
       <button role="tab" id="tab-practice" aria-selected="false" data-view="practice">Practice</button>
       <button role="tab" id="tab-progress" aria-selected="false" data-view="progress">Progress</button>
       <button role="tab" id="tab-space" aria-selected="false" data-view="space">Our space</button>
+      <button role="tab" id="tab-guide" aria-selected="false" data-view="guide">How it works</button>
       <button role="tab" id="tab-plans" aria-selected="false" data-view="plans">Plans</button>
     </nav>
   </div>
+  <p class="banner" id="previewNote" hidden><b>Recording is off in this preview window.</b> Open <b>bawcejawn.github.io/Talya</b> in Chrome, Safari or Edge, or on your phone, to record. You can still explore the examples here.</p>
   <p class="notice">Talya listens to how something is said (pace, pitch, loudness), not what is meant. Results describe how a delivery often comes across. They can be wrong, and they are not a diagnosis or a verdict on who is right.</p>
 
   <section id="view-check" class="grid">
     <div class="panel stack">
+      <div class="setup" id="setup" hidden></div>
       <h2>New check</h2>
       <div class="rec">
         <button class="btn primary" id="recBtn">Record</button>
@@ -209,7 +245,12 @@ textarea{min-height:72px;resize:vertical}
 
   <section id="view-practice" class="stack" hidden>
     <div class="row" style="justify-content:space-between"><h2>Practice</h2><span class="meter" id="streak"></span></div>
-    <p class="fine">Short drills with a measurable goal. Record the line out loud and Talya checks your delivery against the goal. Goals compare to your baseline when you have one.</p>
+    <ol class="howto">
+      <li><span>Pick a drill and read the line on the card to yourself once.</span></li>
+      <li><span>Tap <b>Record</b> on that card, say the line out loud, then tap <b>Stop</b>.</span></li>
+      <li><span>Talya tells you if you met the goal. If not, read the tip and try again.</span></li>
+    </ol>
+    <p class="fine">Each drill trains one thing: slowing down, staying steady, or putting feeling into your voice. Do one a day to build a streak. Goals compare to your calm baseline, so record that first in Check my tone.</p>
     <div class="cards" id="exercises"></div>
   </section>
 
@@ -267,6 +308,55 @@ textarea{min-height:72px;resize:vertical}
     </div>
   </section>
 
+
+  <section id="view-guide" class="stack" hidden>
+    <h2>How Talya works</h2>
+    <ol class="howto">
+      <li><span><b>Record your calm voice once.</b> Check my tone walks you through it. This is your baseline, the "normal you" that everything is compared to.</span></li>
+      <li><span><b>Check a real moment.</b> Say something the way you actually said it, or are about to say it. Talya shows how it may come across.</span></li>
+      <li><span><b>Practice one skill.</b> Drills give you a clear goal, like "say it slower," and tell you when you hit it.</span></li>
+      <li><span><b>Prep hard talks.</b> Build a calm opening line and rehearse it before the real conversation.</span></li>
+    </ol>
+    <h3>What each measurement means</h3>
+    <div class="guide">
+      <div class="card"><h2>Pace</h2>
+        <p>How fast you talk, counted in syllables per second. "Breakfast" is two syllables.</p>
+        <dl><dt>Typical</dt><dd>About 3.6 to 5.2 per second in everyday conversation.</dd><dt>Faster</dt><dd>Often heard as rushed, impatient, defensive or anxious. Your partner gets less room to answer.</dd><dt>Slower</dt><dd>Usually heard as calm and careful. Very slow can sound tired, sad or withholding.</dd></dl></div>
+      <div class="card"><h2>Pitch</h2>
+        <p>How high or low your voice sits. Talya measures it in hertz (Hz), the number of times your vocal cords vibrate per second. Many men speak around 85 to 155 Hz and many women around 165 to 255 Hz, but everyone differs.</p>
+        <p>Because voices differ so much, Talya compares your pitch with <b>your own calm voice</b>, in <b>semitones</b>. A semitone is one step on a piano.</p>
+        <dl><dt>0 to 1</dt><dd>Same as calm. Hard to hear any difference.</dd><dt>+2 or more</dt><dd>Noticeably higher. Common with stress, excitement, upset or pleading.</dd><dt>−2 or less</dt><dd>Noticeably lower. Can sound serious, tired or flat.</dd></dl></div>
+      <div class="card"><h2>Pitch movement</h2>
+        <p>How much your voice goes up and down while you talk. This is what makes speech sound expressive instead of robotic.</p>
+        <dl><dt>Under 1.5</dt><dd>Near monotone. Often read as bored, tired, cold or holding back, even when you are just trying to stay calm.</dd><dt>1.5 to 4</dt><dd>Normal and engaged.</dd><dt>Over 4</dt><dd>Very animated. Reads as excited or upset, depending on loudness and words.</dd></dl></div>
+      <div class="card"><h2>Loudness</h2>
+        <p>Measured in decibels (dB). Talya looks at whether you got louder or quieter from the start of the clip to the end, and how loud you were compared to your calm voice.</p>
+        <dl><dt>+3 dB</dt><dd>Just noticeable.</dd><dt>+6 dB</dt><dd>Clearly louder. Building volume is one of the most common signs a talk is turning into a fight.</dd><dt>−3 dB or less</dt><dd>Trailing off. Can sound unsure, hurt or like you are giving up on the point.</dd></dl>
+        <p class="fine">How close you hold the microphone changes loudness, so keep the same distance as when you recorded your baseline.</p></div>
+      <div class="card"><h2>Sentence endings</h2>
+        <p>Whether your voice goes up or down on the last words.</p>
+        <dl><dt>Rising</dt><dd>Sounds like a question. Can come across as unsure, or as "right?" pressure.</dd><dt>Falling</dt><dd>Sounds finished and certain. A sharp drop can sound curt.</dd><dt>Level</dt><dd>Neutral.</dd></dl></div>
+      <div class="card"><h2>Pauses</h2>
+        <p>The share of time you stop talking for a third of a second or longer.</p>
+        <dl><dt>Under 8%</dt><dd>Hardly any breaks. Can feel like a lecture, with no room to respond.</dd><dt>8 to 35%</dt><dd>Natural.</dd><dt>Over 35%</dt><dd>Lots of stopping. Thoughtful, or hesitant and uncomfortable.</dd></dl></div>
+      <div class="card"><h2>The picture</h2>
+        <p>Time runs left to right. <b>Gray bars</b> show how loud you were at each moment. <b>Green dots</b> show how high your voice was: higher dots mean a higher voice.</p>
+        <p>Look for patterns: dots climbing toward the end means your voice rose as you went. Bars getting taller means you got louder. A flat row of dots means a monotone.</p></div>
+      <div class="card"><h2>Tone tags</h2>
+        <dl><dt>Warm, even</dt><dd>Normal pace and steady volume, with natural pitch movement.</dd><dt>Tense / pressured</dt><dd>Fast, and higher or louder than your calm voice.</dd><dt>Escalating</dt><dd>Getting louder or higher as you go.</dd><dt>Flat / withdrawn</dt><dd>Very little pitch movement and even volume.</dd><dt>Soft / apologetic</dt><dd>Slower and quieter than your calm voice.</dd><dt>Questioning</dt><dd>Rising endings.</dd><dt>Neutral</dt><dd>Nothing stands out.</dd></dl></div>
+      <div class="card"><h2>What Talya can't do</h2>
+        <ul><li>It hears <b>how</b> you speak, not <b>what</b> you say or mean.</li><li>It can't tell sarcasm, jokes or a cold from real feelings.</li><li>Accents, background noise and a phone held too far away all change results.</li><li>It never decides who is right, and it is not therapy or a diagnosis.</li><li>That is why confidence never goes above Moderate.</li></ul></div>
+    </div>
+    <h3>Recording not working?</h3>
+    <details class="trouble" open><summary>Nothing happens, or it says access is blocked</summary>
+      <ul class="tips"><li><b>Use the real site, not a preview.</b> Recording only works at bawcejawn.github.io/Talya (or in the app), not inside a preview window.</li>
+      <li><b>Allow the microphone.</b> In Chrome or Edge, click the icon left of the web address, set Microphone to Allow, and reload. In Safari on a Mac, go to Safari → Settings → Websites → Microphone.</li>
+      <li><b>On a Mac,</b> also open System Settings → Privacy &amp; Security → Microphone and turn on your browser.</li>
+      <li><b>On Windows,</b> open Settings → Privacy &amp; security → Microphone and allow desktop apps and your browser.</li>
+      <li><b>Close Zoom, Teams or FaceTime</b> if they are using the microphone.</li></ul></details>
+    <details class="trouble"><summary>It records, but says it couldn't hear me</summary>
+      <ul class="tips"><li>Watch the green bar while you speak. If it barely moves, your computer may be using the wrong microphone. Check your sound settings for the input device.</li><li>Sit about an arm's length away and talk at normal volume for at least 5 seconds.</li><li>Or use your phone: it usually has a better microphone for this.</li></ul></details>
+  </section>
   <section id="view-plans" class="stack" hidden>
     <h2>Plans</h2>
     <p class="fine">Everything is free during the beta. These are the planned prices. One plan covers both partners. No ads, and voice data is never sold.</p>

@@ -1,0 +1,91 @@
+name: Build apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.TALYA_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Build web files and copy them into the app
+        run: |
+          npm ci
+          sh build.sh
+          npx cap sync android
+      - name: Build test APK (install directly on Android phones)
+        env:
+          TALYA_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../talya-beta.apk
+      - name: Build Play Store bundle (only when signing secrets are set)
+        if: env.HAS_KEY == 'true'
+        env:
+          TALYA_VERSION_CODE: ${{ github.run_number }}
+          TALYA_KEYSTORE_PASSWORD: ${{ secrets.TALYA_KEYSTORE_PASSWORD }}
+          TALYA_KEY_ALIAS: ${{ secrets.TALYA_KEY_ALIAS }}
+          TALYA_KEY_PASSWORD: ${{ secrets.TALYA_KEY_PASSWORD }}
+        run: |
+          echo "${{ secrets.TALYA_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+          export TALYA_KEYSTORE="$RUNNER_TEMP/upload.keystore"
+          cd android
+          ./gradlew bundleRelease --no-daemon
+          cp app/build/outputs/bundle/release/app-release.aab ../talya-play.aab
+      - uses: actions/upload-artifact@v4
+        with:
+          name: talya-android
+          path: |
+            talya-beta.apk
+            talya-play.aab
+          if-no-files-found: ignore
+      - name: Publish the test APK as a download link
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-beta --yes --cleanup-tag || true
+          gh release create android-beta talya-beta.apk \
+            --title "Talya Android test build #${{ github.run_number }}" \
+            --notes "Test build for Android phones. Download talya-beta.apk on your phone, open it, and allow installing from your browser when asked. Built from ${{ github.sha }}." \
+            --prerelease
+
+  ios:
+    # Checks that the iPhone project compiles. Making an installable iPhone build needs an Apple Developer account.
+    runs-on: macos-15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build web files and copy them into the app
+        run: |
+          npm ci
+          sh build.sh
+          npx cap sync ios
+      - name: Compile for the iPhone simulator
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -30

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Talya</string>
+    <string name="title_activity_main">Talya</string>
+    <string name="package_name">io.github.bawcejawn.talya</string>
+    <string name="custom_url_scheme">io.github.bawcejawn.talya</string>
+</resources>

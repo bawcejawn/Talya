@@ -77,8 +77,8 @@ async function decodeBlob(blob) {
   for (let ch = 0; ch < audio.numberOfChannels; ch++) { const d = audio.getChannelData(ch); for (let i = 0; i < len; i++) data[i] += d[i] / audio.numberOfChannels; }
   return { data, sr: audio.sampleRate, trimmed: audio.length > len };
 }
-async function blobToClip(blob, name) {
-  const audio = await decodeBlob(blob);
+async function blobToClip(src, name) {
+  const audio = (typeof Blob !== 'undefined' && src instanceof Blob) ? await decodeBlob(src) : src;
   await new Promise(r => setTimeout(r, 20));
   const metrics = Core.analyze(audio.data, audio.sr);
   if (audio.trimmed) toast('Only the first 60 seconds were analyzed.');
@@ -87,29 +87,70 @@ async function blobToClip(blob, name) {
   return { id: 'u' + Date.now(), name, audio, metrics };
 }
 const timeLabel = () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
-function makeRecorder(btn, note, onBlob, idleLabel) {
-  const rec = { mr: null, chunks: [], stream: null, t0: 0, timer: null };
+const IN_PREVIEW = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+const IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+function micError(e) {
+  const n = e && e.name;
+  if (IN_PREVIEW) return 'Recording is turned off inside this preview window. Open bawcejawn.github.io/Talya in Chrome, Safari or Edge to record.';
+  if (n === 'NotAllowedError' || n === 'SecurityError') return IS_NATIVE
+    ? 'Talya does not have microphone access. Open your phone\'s Settings, find Talya, and turn on Microphone.'
+    : 'Microphone access is blocked. Click the lock or settings icon left of the web address, set Microphone to Allow, then reload the page. On a Mac, also check System Settings → Privacy & Security → Microphone.';
+  if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No microphone was found. Plug in or turn on a microphone, or use your phone instead.';
+  if (n === 'NotReadableError') return 'Another app is using the microphone (for example Zoom or Teams). Close it and try again.';
+  return 'Recording could not start in this browser. Try Chrome, Safari or Edge, or upload a voice memo.';
+}
+// Captures raw audio straight from the microphone (no file encoding), and shows a live level meter.
+function makeRecorder(btn, note, onAudio, idleLabel) {
+  const defaultNote = note.textContent;
+  const lvl = document.createElement('div'); lvl.className = 'lvl'; lvl.hidden = true;
+  lvl.innerHTML = '<div class="lvlbar"><i></i></div><span class="lvltxt">Listening…</span>';
+  btn.insertAdjacentElement('afterend', lvl);
+  const bar = lvl.querySelector('i'), txt = lvl.querySelector('.lvltxt');
+  const rec = { on: false, ctx: null, stream: null, proc: null, chunks: [], t0: 0, timer: null, peak: -100, lastLoud: 0 };
   const label = () => {
-    if (rec.mr) { const s = Math.floor((Date.now() - rec.t0) / 1000); btn.textContent = `Stop · 0:${String(s).padStart(2, '0')}`; btn.classList.remove('primary'); btn.classList.add('danger'); }
+    if (rec.on) { const s = Math.floor((Date.now() - rec.t0) / 1000); btn.textContent = `Stop · 0:${String(s).padStart(2, '0')}`; btn.classList.remove('primary'); btn.classList.add('danger'); }
     else { btn.textContent = typeof idleLabel === 'function' ? idleLabel() : idleLabel; btn.classList.add('primary'); btn.classList.remove('danger'); }
   };
+  async function stop() {
+    if (!rec.on) return; rec.on = false; clearInterval(rec.timer);
+    try { rec.proc.disconnect(); } catch (e) {}
+    rec.stream.getTracks().forEach(t => t.stop());
+    const sr = rec.ctx.sampleRate; try { rec.ctx.close(); } catch (e) {}
+    let n = 0; rec.chunks.forEach(c => n += c.length);
+    const data = new Float32Array(n); let o = 0; rec.chunks.forEach(c => { data.set(c, o); o += c.length; });
+    lvl.hidden = true; label();
+    if (n < sr * 1.5) { note.textContent = 'That was too short. Tap Record, speak for at least 5 seconds, then tap Stop.'; return; }
+    note.textContent = defaultNote;
+    try { await onAudio({ data, sr }); } catch (e) { note.textContent = 'That recording could not be analyzed. Please try again.'; }
+  }
   btn.addEventListener('click', async () => {
-    if (rec.mr) { rec.mr.stop(); return; }
-    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) { note.textContent = 'This browser cannot record here. Upload a voice memo instead.'; return; }
-    try { rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
-    catch (e) { note.textContent = 'Microphone access was blocked. Allow it in your browser settings, or upload a voice memo instead.'; return; }
+    if (rec.on) { stop(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && AC)) { note.textContent = micError({}); return; }
     stopPlay();
-    rec.chunks = []; rec.mr = new MediaRecorder(rec.stream);
-    rec.mr.ondataavailable = e => { if (e.data && e.data.size) rec.chunks.push(e.data); };
-    rec.mr.onstop = async () => {
-      clearInterval(rec.timer); rec.stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(rec.chunks, { type: rec.mr.mimeType || 'audio/webm' });
-      rec.mr = null; label();
-      try { await onBlob(blob); } catch (e) { note.textContent = 'That recording could not be read. Try again, or upload a voice memo.'; }
+    rec.ctx = new AC();                       // created inside the tap so phones allow audio
+    try { await rec.ctx.resume(); } catch (e) {}
+    try { rec.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
+    catch (e) { try { rec.ctx.close(); } catch (x) {} note.textContent = micError(e); return; }
+    const src = rec.ctx.createMediaStreamSource(rec.stream);
+    rec.proc = rec.ctx.createScriptProcessor(4096, 1, 1);
+    const mute = rec.ctx.createGain(); mute.gain.value = 0;
+    rec.chunks = []; rec.peak = -100; rec.lastLoud = Date.now();
+    rec.proc.onaudioprocess = ev => {
+      if (!rec.on) return;
+      const d = ev.inputBuffer.getChannelData(0); rec.chunks.push(new Float32Array(d));
+      let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+      const db = 10 * Math.log10(s / d.length + 1e-12), v = Math.max(0, Math.min(1, (db + 60) / 45));
+      bar.style.width = (v * 100).toFixed(0) + '%';
+      if (db > -48) rec.lastLoud = Date.now();
+      const quiet = Date.now() - rec.lastLoud > 2500;
+      txt.textContent = quiet ? 'I can\'t hear you. Speak up, or move closer to the mic.' : db > -48 ? 'Hearing you. Keep talking.' : 'Listening…';
+      lvl.classList.toggle('quiet', quiet);
     };
-    rec.mr.start(); rec.t0 = Date.now(); label();
-    rec.timer = setInterval(() => { if (!rec.mr) return; label(); if (Date.now() - rec.t0 >= 60000) rec.mr.stop(); }, 250);
+    src.connect(rec.proc); rec.proc.connect(mute); mute.connect(rec.ctx.destination);
+    rec.on = true; rec.t0 = Date.now(); lvl.hidden = false; lvl.classList.remove('quiet'); label();
+    note.textContent = 'Tap Stop when you are done. Recording stops by itself at 60 seconds.';
+    rec.timer = setInterval(() => { if (!rec.on) return; label(); if (Date.now() - rec.t0 >= 60000) stop(); }, 250);
   });
   return { relabel: label };
 }
@@ -154,49 +195,119 @@ function drawViz(clip, cv, head) {
 
 // ---------- result card (shared by check, prep, practice) ----------
 const fmtSigned = (v, d = 1) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d);
+const pctOf = (v, lo, hi) => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+function scaleHTML(v, lo, hi, bLo, bHi, baseV, left, right) {
+  const tick = baseV == null || !isFinite(baseV) ? '' : `<b class="btick" style="left:${pctOf(baseV, lo, hi)}%" title="Your calm baseline"></b>`;
+  return `<div class="scale" aria-hidden="true"><span class="band" style="left:${pctOf(bLo, lo, hi)}%;width:${pctOf(bHi, lo, hi) - pctOf(bLo, lo, hi)}%"></span>${tick}<i style="left:${pctOf(v, lo, hi)}%"></i></div><div class="scalelab"><span>${left}</span><span>typical</span><span>${right}</span></div>`;
+}
+function explain(m, base) {
+  const rows = [];
+  const paceVs = base && isFinite(base.rate) && Math.abs(m.rate / base.rate - 1) >= 0.1 ? ` That is ${Math.round(Math.abs(m.rate / base.rate - 1) * 100)}% ${m.rate > base.rate ? 'faster' : 'slower'} than your calm voice.` : '';
+  rows.push({ name: 'Pace', val: `<code>${m.rate.toFixed(1)}</code> syllables per second`, scale: scaleHTML(m.rate, 2, 8, 3.6, 5.2, base && base.rate, 'Slow', 'Fast'),
+    mean: (m.rate > 5.2 ? 'Faster than most everyday conversation. Fast speech can sound rushed, impatient or defensive, and leaves your partner little room to answer.'
+      : m.rate < 3.6 ? 'Slower than most everyday conversation. This usually sounds calm or careful. Very slow speech can also sound tired, sad, or like you are holding something back.'
+      : 'A normal conversational pace. This usually sounds relaxed and easy to follow.') + paceVs });
+  if (base) {
+    const d = m.medSt - base.medSt;
+    rows.push({ name: 'Pitch (how high your voice is)', val: `<code>${fmtSigned(d)}</code> semitones vs your calm voice`, scale: scaleHTML(d, -6, 6, -2, 2, 0, 'Lower', 'Higher'),
+      mean: (d >= 2 ? `Your voice sat ${d.toFixed(1)} semitones higher than when you are calm. A semitone is one step on a piano; 2 or more is noticeable to a listener. A raised voice often signals stress, excitement or upset.`
+        : d <= -2 ? `Your voice sat ${Math.abs(d).toFixed(1)} semitones lower than when you are calm. A lower voice can sound serious, tired or low on energy.`
+        : 'About the same height as your calm voice, which usually sounds steady.') });
+  } else {
+    rows.push({ name: 'Pitch (how high your voice is)', val: `<code>${Math.round(m.medHz)} Hz</code>`, scale: '',
+      mean: 'Everyone\'s voice sits at a different height, so this number only means something compared to your own calm voice. This clip is your reference point.' });
+  }
+  rows.push({ name: 'Pitch movement (up and down)', val: `<code>${m.iqr.toFixed(1)}</code> semitones of range`, scale: scaleHTML(m.iqr, 0, 8, 1.5, 4, base && base.iqr, 'Flat', 'Animated'),
+    mean: m.iqr < 1.5 ? 'Very little up and down, close to a monotone. To a listener this can sound tired, bored, or like you are holding feelings back, even if you are just trying to stay calm.'
+      : m.iqr > 4 ? 'A lot of up and down. This sounds animated. It can read as enthusiastic, or as upset, depending on your words and volume.'
+      : 'A normal amount of up and down. You sound engaged without sounding dramatic.' });
+  let loudMean = m.dbRise >= 3 ? `You got ${m.dbRise.toFixed(1)} dB louder from start to end. About 3 dB is noticeable and 6 dB sounds clearly louder. Getting louder as you go often reads as frustration building.`
+    : m.dbRise <= -3 ? `You got ${Math.abs(m.dbRise).toFixed(1)} dB quieter from start to end. Trailing off can sound unsure or hurt, or like you are giving up on the point.`
+    : 'Your volume stayed fairly steady, which tends to sound in control.';
+  if (base) { const dl = m.meanDb - base.meanDb; if (Math.abs(dl) >= 3) loudMean += ` Overall you were ${Math.abs(dl).toFixed(0)} dB ${dl > 0 ? 'louder' : 'quieter'} than your calm voice (if you held the mic at the same distance).`; }
+  rows.push({ name: 'Loudness change', val: `<code>${fmtSigned(m.dbRise)} dB</code> from start to end`, scale: scaleHTML(m.dbRise, -10, 10, -3, 3, null, 'Quieter', 'Louder'), mean: loudMean });
+  rows.push({ name: 'Sentence endings', val: m.endRise > 1.5 ? 'Going up' : m.endRise < -1 ? 'Going down' : 'Level', scale: scaleHTML(m.endRise, -6, 6, -1, 1.5, null, 'Falling', 'Rising'),
+    mean: m.endRise > 1.5 ? 'Your last words went up in pitch. Rising endings sound like a question. They can come across as unsure, or as "right?" pressure.'
+      : m.endRise < -1 ? 'Your last words went down in pitch. Falling endings sound finished and certain. A very strong drop can sound final or curt.'
+      : 'Your ending stayed level, which sounds neutral.' });
+  const pr = m.pauseRatio * 100;
+  rows.push({ name: 'Pauses', val: `<code>${Math.round(pr)}%</code> of the time`, scale: scaleHTML(pr, 0, 60, 8, 35, null, 'None', 'Many'),
+    mean: pr < 8 ? 'Almost no pauses. Without breaks your partner has no room to respond, and it can feel rushed or like a lecture.'
+      : pr > 35 ? 'A lot of pausing. This can sound thoughtful, or hesitant and uncomfortable.'
+      : 'A natural amount of pausing, which gives a listener time to take things in.' });
+  return rows;
+}
+function reasons(m, base, top) {
+  const out = [];
+  if (m.rate > 5.2) out.push(`fast pace (${m.rate.toFixed(1)})`);
+  if (m.rate < 3.6) out.push(`slow pace (${m.rate.toFixed(1)})`);
+  if (base && m.medSt - base.medSt >= 1.5) out.push(`voice ${(m.medSt - base.medSt).toFixed(1)} semitones above your calm voice`);
+  if (base && m.meanDb - base.meanDb >= 2) out.push(`louder than your calm voice`);
+  if (base && base.meanDb - m.meanDb >= 2) out.push(`quieter than your calm voice`);
+  if (m.dbRise >= 3) out.push(`volume building up (+${m.dbRise.toFixed(1)} dB)`);
+  if (m.iqr < 1.5) out.push(`very little pitch movement`);
+  if (m.iqr > 4) out.push(`a lot of pitch movement`);
+  if (m.endRise > 1.5) out.push(`rising sentence endings`);
+  if (!out.length) return top === 'neutral' || top === 'warm' ? 'Pace, pitch and volume were all close to normal.' : '';
+  return 'Mainly because of: ' + out.slice(0, 3).join(', ') + '.';
+}
 function resultHTML(clip, r, base, opts = {}) {
   const m = clip.metrics, top = r.tags[0].key, copy = COPY[top];
   const tagsHtml = r.tags.map(t => `<span class="tag ${Core.TAGS[t.key].tone}">${Core.TAGS[t.key].name}<i>${Math.round(t.score * 100)}</i></span>`).join('');
-  if (opts.compact) return `<div class="stack" style="gap:10px"><div class="tags">${tagsHtml}</div><p>${copy.lead}</p><p class="hint">Pace <code>${m.rate.toFixed(1)}</code> syll/s · pitch movement <code>${m.iqr.toFixed(1)}</code> st · loudness <code>${fmtSigned(m.dbRise)} dB</code> start to end · confidence ${r.confidence.toLowerCase()}</p></div>`;
-  const isBase = !base && !clip.example ? false : !base;
-  const rateNote = m.rate > 5.2 ? 'faster than typical conversation' : m.rate < 3.6 ? 'slower than typical conversation' : 'typical conversational pace';
-  const pitchNote = m.iqr < 1.5 ? 'narrow, very even' : m.iqr > 4 ? 'wide, very animated' : 'moderate';
-  const end = m.endRise > 1.5 ? 'rising' : m.endRise < -1 ? 'falling' : 'level';
-  const vsBase = base ? `<code>${fmtSigned(m.medSt - base.medSt)}</code> semitones vs baseline` : 'this is the baseline';
-  const loudBase = base ? ` · <code>${fmtSigned(m.meanDb - base.meanDb)} dB</code> vs baseline` : '';
+  const why = reasons(m, base, top);
+  if (opts.compact) return `<div class="stack" style="gap:10px"><div class="tags">${tagsHtml}</div><p>${copy.lead}</p>${why ? `<p class="hint">${why}</p>` : ''}</div>`;
+  const rows = explain(m, base).map(x => `<div class="mrow"><div class="mhead"><b>${x.name}</b><span>${x.val}</span></div>${x.scale}<p>${x.mean}</p></div>`).join('');
   return `
     <div class="result-head">
       <div class="stack" style="gap:8px"><h3>${esc(clip.name)}${clip.example ? ' · example' : ''}</h3><div class="tags">${tagsHtml}</div></div>
       <div class="conf">Confidence: <b>${r.confidence}</b><br>${m.quality === 'good' ? 'Clear recording' : 'Noisy or short recording'}</div>
     </div>
     <p class="lead">${copy.lead}</p>
+    ${why ? `<p class="why">${why}</p>` : ''}
     <div class="viz"><canvas aria-label="Loudness and pitch over time"></canvas>
-      <div class="legend"><span style="--k:var(--line)">Loudness</span><span style="--k:var(--accent)">Pitch</span><span style="--k:var(--hot)">Playhead</span></div></div>
+      <div class="legend"><span style="--k:var(--line)">Gray bars: how loud you were</span><span style="--k:var(--accent)">Green dots: how high your voice was</span></div>
+      <p class="hint" style="padding:4px 4px 0">Time runs left to right. Taller bars mean louder. Higher dots mean a higher voice. A climbing line of dots means your voice rose as you spoke.</p></div>
     <div class="row">
       <button class="btn" data-act="play">Play clip</button>
       <div class="switch" role="group" aria-label="Perspective">
         <button data-p="speaker" aria-pressed="${state.persp === 'speaker'}">What I meant</button>
         <button data-p="listener" aria-pressed="${state.persp === 'listener'}">How it might land</button>
       </div>
-      ${base ? '<button class="btn" data-act="base">Use as my baseline</button>' : ''}
+      ${base && !clip.example ? '<button class="btn" data-act="base">Use as my calm baseline</button>' : ''}
     </div>
     <div class="persp"><h3>${state.persp === 'speaker' ? 'From your side' : 'From your partner\'s side'}</h3><p>${state.persp === 'speaker' ? copy.speaker : copy.listener}</p></div>
-    <div class="two">
-      <div class="stack"><h3>What Talya measured</h3>
-        <dl class="meas">
-          <dt>Pace</dt><dd><code>${m.rate.toFixed(1)}</code> syllables/s, ${rateNote}</dd>
-          <dt>Pitch</dt><dd><code>${Math.round(m.medHz)} Hz</code> typical, ${vsBase}</dd>
-          <dt>Pitch movement</dt><dd><code>${m.iqr.toFixed(1)}</code> semitones, ${pitchNote}</dd>
-          <dt>Loudness</dt><dd><code>${fmtSigned(m.dbRise)} dB</code> start to end${loudBase}</dd>
-          <dt>Endings</dt><dd>${end}</dd>
-          <dt>Pauses</dt><dd><code>${Math.round(m.pauseRatio * 100)}%</code> of speaking time</dd>
-        </dl></div>
-      <div class="stack"><h3>Try next time</h3><ul class="tips">${copy.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
-        <button class="link" data-goto="practice" style="align-self:flex-start">Practice this in a drill</button></div>
-    </div>
-    <p class="fine">Scores are 0 to 100 pattern matches, not percentages of emotion. Accents, colds, background noise and sarcasm all throw this off. Confidence is never shown as high, because voice alone cannot confirm how you feel.</p>`;
+    <div class="stack"><div class="row" style="justify-content:space-between"><h3>What Talya measured, and what it means</h3><button class="link" data-goto="guide">Full guide</button></div>
+      <p class="hint">On each scale, the shaded part is the typical range, the dot is this clip${base ? ', and the purple line is your calm baseline' : ''}.</p>
+      <div class="mrows">${rows}</div></div>
+    <div class="stack"><h3>Try next time</h3><ul class="tips">${copy.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+      <button class="link" data-goto="practice" style="align-self:flex-start">Practice this in a drill</button></div>
+    <p class="fine">The numbers next to each tag (0 to 100) show how strongly the clip matches that pattern. They are not percentages of emotion. Accents, colds, background noise and sarcasm all throw this off. Confidence is never shown as high, because voice alone cannot confirm how you feel.</p>`;
 }
-const tooQuietHTML = `<p class="lead">Talya could not find enough voice in this clip.</p><p class="fine">Try again closer to the phone, in a quieter room, with at least 5 seconds of speech.</p>`;
+const tooQuietHTML = `<p class="lead">Talya could not hear enough voice in this clip.</p><p class="fine">Hold the phone or sit about an arm's length from the computer, in a quiet room, and speak for at least 5 seconds. Watch the green bar while you record: it should move when you talk.</p>`;
+
+// ---------- guided setup ----------
+const SETUP = [
+  { t: 'Record your calm voice', say: 'This morning I had coffee and toast. Then I checked the weather and got ready for the day. Nothing special, just a normal morning.',
+    how: 'Tap Record and read this out loud in your normal, relaxed voice. Tap Stop when you finish. Talya saves it as your calm baseline, so later clips are compared to how you usually sound.' },
+  { t: 'Say it the way it comes out in a tense moment', say: 'I asked you to call me, and you didn\'t. I waited for an hour.',
+    how: 'Now say this the way you might when you are frustrated. Don\'t act; just say it how it usually comes out.' },
+  { t: 'Read your result', say: '',
+    how: 'Your result is next to this box (below it on a phone). It compares this clip to your calm voice: faster or slower, higher or lower, louder or quieter. Each measurement has a short explanation. When you are ready, try a drill in Practice.' }
+];
+const setupStep = () => { const s = Store.get('setup', null); if (s === 'done') return 0; if (s) return s; return Store.get('baseline', null) ? 0 : 1; };
+function renderSetup() {
+  const n = setupStep(), el = $('#setup');
+  if (!n) { el.hidden = true; return; }
+  const s = SETUP[n - 1];
+  el.hidden = false;
+  el.innerHTML = `<div class="row" style="justify-content:space-between"><h3>Get started · step ${n} of 3</h3><button class="link" data-act="skip">Skip</button></div>
+    <div class="steps">${[1, 2, 3].map(i => `<span class="${i < n ? 'done' : i === n ? 'now' : ''}"></span>`).join('')}</div>
+    <h2>${s.t}</h2>${s.say ? `<p class="script">"${esc(s.say)}"</p>` : ''}<p class="hint">${s.how}</p>
+    ${n === 3 ? '<div class="row"><button class="btn primary" data-act="done">Done</button><button class="btn" data-goto="practice">Go to Practice</button></div>' : ''}`;
+}
+$('#setup').addEventListener('click', e => {
+  if (e.target.closest('[data-act="skip"]') || e.target.closest('[data-act="done"]') || e.target.closest('[data-goto]')) { Store.set('setup', 'done'); renderSetup(); checkRec.relabel(); }
+});
 
 // ---------- check tab ----------
 function renderClips() {
@@ -208,8 +319,8 @@ function renderClips() {
   }).join('');
   const b = getBase();
   $('#base').innerHTML = savedBase
-    ? `<b>Your baseline:</b> ${esc(b.name)}, set ${new Date(savedBase.ts).toLocaleDateString()}. Pitch, loudness and pace are compared to it. <button class="link" data-act="rmbase">Remove</button>`
-    : `<b>Using an example baseline.</b> For real accuracy, record yourself saying something neutral (what you had for breakfast), then tap "Use as my baseline."`;
+    ? `<b>Your calm baseline:</b> ${esc(b.name)}, set ${new Date(savedBase.ts).toLocaleDateString()}. Other clips are compared to it. <button class="link" data-act="rmbase">Redo it</button>`
+    : `<b>No calm baseline yet,</b> so Talya is comparing to an example voice. Results get much more accurate once you record your own (step 1 above).`;
 }
 function renderCheck() {
   const c = state.clips.find(x => x.id === state.sel), el = $('#result');
@@ -219,25 +330,32 @@ function renderCheck() {
   el.innerHTML = resultHTML(c, r, base);
   drawViz(c, $('canvas', el));
 }
-async function addUserClip(blob, name) {
+async function addUserClip(src, name) {
   $('#result').innerHTML = '<p class="empty">Analyzing on this device…</p>';
+  const step = setupStep();
   try {
-    const c = await blobToClip(blob, name);
+    const c = await blobToClip(src, step === 1 ? 'Calm baseline' : step === 2 ? 'Tense-moment take' : name);
     state.clips.push(c); state.sel = c.id;
-    if (!c.metrics.tooQuiet) addEntry('check', c.name, c.metrics, Core.interpret(c.metrics, baseFor(c.id)));
-    renderClips(); renderCheck();
+    if (!c.metrics.tooQuiet) {
+      if (step === 1) { Store.set('baseline', { name: c.name, ts: Date.now(), m: slim(c.metrics) }); Store.set('setup', 2); toast('Calm baseline saved. Now step 2.'); }
+      else if (step === 2) Store.set('setup', 3);
+      addEntry('check', c.name, c.metrics, Core.interpret(c.metrics, baseFor(c.id)));
+    }
+    renderSetup(); checkRec.relabel(); renderClips(); renderCheck();
+    if (window.innerWidth < 820) $('#result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) { $('#result').innerHTML = '<p class="empty">This file could not be read as audio. Try an .m4a, .mp3 or .wav voice memo.</p>'; }
 }
-makeRecorder($('#recBtn'), $('#recNote'), b => addUserClip(b, 'Recording ' + timeLabel()), 'Record');
+const checkRec = makeRecorder($('#recBtn'), $('#recNote'), a => addUserClip(a, 'Recording ' + timeLabel()), () => { const n = setupStep(); return n === 1 || n === 2 ? `Record step ${n}` : 'Record'; });
+checkRec.relabel();
 $('#clips').addEventListener('click', e => { const b = e.target.closest('.clip'); if (!b) return; stopPlay(); state.sel = b.dataset.id; renderClips(); renderCheck(); });
-$('#base').addEventListener('click', e => { if (e.target.closest('[data-act="rmbase"]')) { try { localStorage.removeItem('talya.baseline'); } catch (x) {} renderClips(); renderCheck(); } });
+$('#base').addEventListener('click', e => { if (e.target.closest('[data-act="rmbase"]')) { try { localStorage.removeItem('talya.baseline'); } catch (x) {} Store.set('setup', 1); renderSetup(); checkRec.relabel(); renderClips(); renderCheck(); } });
 $('#result').addEventListener('click', e => {
   const c = state.clips.find(x => x.id === state.sel); if (!c) return;
   if (e.target.closest('[data-act="play"]')) play(c, $('#result canvas'), e.target.closest('[data-act="play"]'));
   const p = e.target.closest('[data-p]'); if (p) { state.persp = p.dataset.p; renderCheck(); }
   if (e.target.closest('[data-act="base"]')) {
-    if (c.example) { toast('Examples cannot be your baseline. Record your own calm clip.'); return; }
-    Store.set('baseline', { name: c.name, ts: Date.now(), m: slim(c.metrics) }); renderClips(); renderCheck(); toast('Baseline saved on this device.');
+    Store.set('baseline', { name: c.name, ts: Date.now(), m: slim(c.metrics) }); if (setupStep() === 1) Store.set('setup', 2);
+    renderSetup(); checkRec.relabel(); renderClips(); renderCheck(); toast('Calm baseline saved on this device.');
   }
 });
 $('#file').addEventListener('change', e => { const f = e.target.files[0]; if (f) addUserClip(f, f.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'My clip'); e.target.value = ''; });
@@ -245,6 +363,7 @@ const drop = $('#drop');
 ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) addUserClip(f, f.name.replace(/\.[^.]+$/, '').slice(0, 40)); });
+if (IN_PREVIEW) $('#previewNote').hidden = false;
 
 // ---------- prep tab ----------
 const TOPICS = {
@@ -305,7 +424,7 @@ const EX = [
     s: '"I\'ve been feeling stretched thin this week. Could we split dinners differently?"', goal: 'Warm or soft tone, at or below your usual pace.', check: softGoal },
   { id: 'repair', t: 'Repair attempt', free: true, d: 'Pause a conversation that is heating up, before it gets worse.',
     s: '"I\'m getting defensive. Can we slow down for a minute?"', goal: 'No build-up: loudness rises less than 2 dB from start to end.',
-    check: (m, r) => ({ ok: m.dbRise < 2 && !tagIn(r, ['escalating', 'tense']), detail: `Loudness <code>${fmtSigned(m.dbRise)} dB</code> start to end (goal under +2).` }) },
+    check: (m, r) => ({ ok: m.dbRise < 2 && !tagIn(r, ['escalating', 'tense']), detail: `Loudness <code>${fmtSigned(m.dbRise)} dB</code> start to end (goal under +2). Tone: ${r.tags.map(t => Core.TAGS[t.key].name).join(', ')}${tagIn(r, ['escalating', 'tense']) ? ' (goal: not tense or escalating; slow down and soften)' : ''}.` }) },
   { id: 'feel', t: 'Say the feeling', free: true, d: 'Name the emotion out loud so your voice does not have to carry it alone.',
     s: '"I\'m hurt, and I want to understand what happened."', goal: 'Enough pitch movement to sound engaged: 1.8 semitones or more.',
     check: (m) => ({ ok: m.iqr >= 1.8, detail: `Pitch movement <code>${m.iqr.toFixed(1)}</code> semitones (goal 1.8 or more).` }) },
@@ -416,6 +535,14 @@ function drawShare(wk, counts, passed, drillN, streak) {
 $('#hist').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return; Store.set('hist', hist().filter(x => x.id !== b.dataset.del)); renderProgress(); });
 $('#clearHist').addEventListener('click', () => { Store.set('hist', []); renderProgress(); toast('History cleared on this device.'); });
 $('#shareBtn').addEventListener('click', () => {
+  if (IS_NATIVE) {
+    const P = window.Capacitor.Plugins;
+    const b64 = $('#shareCv').toDataURL('image/png').split(',')[1];
+    P.Filesystem.writeFile({ path: 'talya-week.png', data: b64, directory: 'CACHE' })
+      .then(r => P.Share.share({ title: 'My week with Talya', files: [r.uri] }))
+      .catch(e => { if (!/cancel/i.test(String(e && e.message))) toast('Sharing did not work. Try again.'); });
+    return;
+  }
   $('#shareCv').toBlob(async blob => {
     if (!blob) { toast('The card could not be created.'); return; }
     const file = new File([blob], 'talya-week.png', { type: 'image/png' });
@@ -460,7 +587,7 @@ $('#view-plans').addEventListener('click', e => {
 });
 
 // ---------- tabs ----------
-const VIEWS = ['check', 'prep', 'practice', 'progress', 'space', 'plans'];
+const VIEWS = ['check', 'prep', 'practice', 'progress', 'space', 'guide', 'plans'];
 function go(v) {
   document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x.dataset.view === v));
   VIEWS.forEach(n => $('#view-' + n).hidden = n !== v);
@@ -473,6 +600,6 @@ const startView = (location.hash || '').slice(1);
 window.addEventListener('resize', () => { const c = state.clips.find(x => x.id === state.sel); if (c && !c.metrics.tooQuiet) drawViz(c, $('#result canvas')); });
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { renderCheck(); renderProgress(); }); } catch (e) {}
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!$('#view-progress').hidden) renderProgress(); });
-renderMeter(); renderClips(); setTopic(topic); renderStreak(); renderProgress();
+renderMeter(); renderSetup(); renderClips(); setTopic(topic); renderStreak(); renderProgress();
 go(VIEWS.includes(startView) ? startView : 'check');
 })();

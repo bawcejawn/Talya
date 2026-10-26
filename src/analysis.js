@@ -136,7 +136,7 @@ const Core = (() => {
     const fast = cl((m.rate - 5.0) / 1.8), slow = cl((4.0 - m.rate) / 1.5);
     const narrow = cl((2.2 - m.iqr) / 1.6), lively = cl((m.iqr - 3.5) / 3);
     const lowDyn = cl((6 - m.dyn) / 4);
-    const esc = cl((m.dbRise / 6) * 0.6 + ((m.stRise || 0) / 3) * 0.4);
+    const esc = cl(((m.dbRise - 1.5) / 6) * 0.6 + ((m.stRise || 0) / 3) * 0.4);
     const rise = cl((m.endRise - 1.5) / 2.5), fall = cl((-m.endRise - 1) / 2.5);
     let pUp = 0, louder = 0, quieter = 0, faster = 0;
     if (base) {

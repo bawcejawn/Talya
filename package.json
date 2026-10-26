@@ -1,0 +1,20 @@
+{
+  "name": "talya",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Talya: hear how your tone of voice comes across",
+  "scripts": {
+    "build": "sh build.sh",
+    "sync": "sh build.sh && npx cap sync"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/share": "8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "appId": "io.github.bawcejawn.talya",
+  "appName": "Talya",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "never" }
+}
