@@ -14,12 +14,12 @@ jobs:
     env:
       HAS_KEY: ${{ secrets.TALYA_KEYSTORE_BASE64 != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -35,7 +35,10 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace > ../gradle.log 2>&1 || {
+            grep -A 25 "What went wrong" ../gradle.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            tail -60 ../gradle.log
+            exit 1; }
           cp app/build/outputs/apk/debug/app-debug.apk ../talya-beta.apk
       - name: Build Play Store bundle (only when signing secrets are set)
         if: env.HAS_KEY == 'true'
@@ -50,7 +53,7 @@ jobs:
           cd android
           ./gradlew bundleRelease --no-daemon
           cp app/build/outputs/bundle/release/app-release.aab ../talya-play.aab
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: talya-android
           path: |
@@ -72,8 +75,8 @@ jobs:
     runs-on: macos-15
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
